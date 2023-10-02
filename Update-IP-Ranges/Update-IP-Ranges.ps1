@@ -17,7 +17,7 @@ Disclaimer:  This script was obtained from https://github.com/cybersylum
 ## Define Environment Variables
 ##
 
-$ImportFile = "/Users/user/Desktop/vRA Network Import/network-ip-info.csv"   #First row must by header which is used by script - it should be PortGroup,Gateway,SubnetMask,NetworkAddress,CIDR,2ndIP,End
+$ImportFile = "network-ip-info.csv"   #First row must by header which is used by script - it should be PortGroup,Gateway,SubnetMask,NetworkAddress,CIDR,2ndIP,End
 # hard-coded values that will be used for all Networks
 
 #Verify Import File exists
@@ -28,13 +28,15 @@ if ((Test-Path -Path $ImportFile -PathType Leaf) -eq $False) {
     exit
 }
 
-$vRAServer = "vra-server.yourdomain.com"
-$vRAUser = "user@yourdomain.com"
+$vRAServer = "vra8.domain.com"
+$vRAUser = "user@domain.com"
 $DateStamp=Get-Date -format "yyyyMMdd"
 $TimeStamp=Get-Date -format "hhmmss"
 $RunLog = "Update-vRA-Networks-IP-Info-$DateStamp-$TimeStamp.log"
 $RateLimit=30
 $RatePause=2
+#QueryLimit is used to control the max rows returned by invoke-restmethod (which has a default of 100)
+$QueryLimit=9999
 
 ##
 ## Function declarations
@@ -60,8 +62,27 @@ function Get-IP-Range {
 
     $results=$false
 
-    $DefinedRanges = (Invoke-vRARestMethod -Method GET -URI "/iaas/api/network-ip-ranges" -WebRequest).content | ConvertFrom-JSON -AsHashtable
-    foreach ($range in $DefinedRanges.content) {
+    #$DefinedRanges = (Invoke-vRARestMethod -Method GET -URI "/iaas/api/network-ip-ranges" -WebRequest).content | ConvertFrom-JSON -AsHashtable
+    #Load IP Ranges from vRA
+$Body = @{
+    '$top' = $QueryLimit
+}
+$APIparams = @{
+    Method = "GET"
+    Uri = "https://$vRAServer/iaas/api/network-ip-ranges"
+    Authentication = "Bearer"
+    Token = $APItoken
+    Body = $Body
+}
+try{
+    $DefinedRanges = (Invoke-RestMethod @APIparams -SkipCertificateCheck).content
+} catch {
+    Write-Log $RunLog $("    Unable to get IP Ranges from vRA")
+    Write-Log $RunLog $Error
+    Write-Log $RunLog $Error[0].Exception.GetType().FullName
+}
+
+    foreach ($range in $DefinedRanges) {
         if ($range.name -eq $IpRangeName) {
             $results=$range.id
             break
@@ -81,8 +102,25 @@ function Get-Matching-NetworkIDs {
 
     Write-Log $RunLog $("       searching for networks called - " + $PortGroup)
 
-    $DefinedNetworks = (Invoke-vRARestMethod -Method GET -URI "/iaas/api/fabric-networks-vsphere" -WebRequest).content | ConvertFrom-JSON -AsHashtable
-    foreach ($item in $DefinedNetworks.content) {
+    #$DefinedNetworks = (Invoke-vRARestMethod -Method GET -URI "/iaas/api/fabric-networks-vsphere" -WebRequest).content | ConvertFrom-JSON -AsHashtable
+    $Body = @{
+        '$top' = $QueryLimit
+    }
+    $APIparams = @{
+        Method = "GET"
+        Uri = "https://$vRAServer/iaas/api/fabric-networks-vsphere"
+        Authentication = "Bearer"
+        Token = $APItoken
+        Body = $Body
+    }
+    try{
+        $DefinedNetworks = (Invoke-RestMethod @APIparams -SkipCertificateCheck).content
+    } catch {
+        Write-Log $RunLog $("    Unable to get networks from vRA")
+        Write-Log $RunLog $Error
+        Write-Log $RunLog $Error[0].Exception.GetType().FullName
+    }
+    foreach ($item in $DefinedNetworks) {
         if ($item.name -eq $PortGroup) {
             $MatchingNetworkIDs.add($item.id,$item.id)
             Write-Log $RunLog $("       Found Matching network id - " + $Item.id)
@@ -188,16 +226,17 @@ if (-not(Test-Path -Path $ImportFile -PathType Leaf)) {
 }
 
 #Connect to vRA
-write-host "Connecting to Aria Automation - $vRAServer"
+write-host "Connecting to Aria Automation - $vRAServer as $vRAUser"
 $vRA=connect-vraserver -server $vRAServer -Username "$vRAUser" -IgnoreCertRequirements
-if ($null -eq $vRA) {
+if ($vRA -eq $null) {
     write-host "Unable to connect to vRA Server '$vRAServer'..."
     Write-Log $RunLog ("Unable to connect to vRA Server '$vRAServer'...")
     exit
 }
 
-# Get vRA-defined Networks (Resources -> Networks) and build lookup table
-#$Networks = (Invoke-vRARestMethod -Method GET -URI "/iaas/api/fabric-networks-vsphere" -WebRequest).content | ConvertFrom-JSON -AsHashtable
+#Grab the bearer token for use with invoke-restmethod
+$APItoken= $vRA.token | ConvertTo-SecureString -AsPlainText -Force
+
 
 write-host "Updating IP Ranges with information from $ImportFile"
 Write-Log $RunLog $("Updating IP Ranges with information from $ImportFile")
