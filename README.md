@@ -15,5 +15,6 @@ There are 3 scripts and are designed to be run in order:<br>
 <li>Update-IP-Ranges.ps1 - This will update or create IP Ranges using the same CSV File.  It will associate any Networks using the same name to the IP Range</li>
 <li>Update-Network-Profiles.ps1 - This is still in progress and will be released when ready; but will create Network Profiles based on the discovered Networks</li>
 </ol>
+There is a companion script which can be used to identify Aria Automation Networks that are missing IP Information - <a href="https://github.com/cybersylum/Export-Networks-Empty-CIDR" target="_blank">Export-Networks-Empty-CIDR</a>
 
 <p>All scripts require Poweshell and PowerVRA 6.x+ - https://github.com/jakkulabs/PowervRA</p>
