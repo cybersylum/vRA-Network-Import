@@ -254,7 +254,7 @@ foreach ($IpRange in $NetworkData.GetEnumerator()) {
         if ($IpRangeID -ne $false) {
             Update-IP-Range $IpRangeID $IpRange.NetworkAddress $IpRange.StartAddr $IpRange.LastAddr $IpRange.PortGroup
         } else {
-            Create-IP-Range $IpRange.NetworkAddress $IpRange.StartAddr $IpRange.LastAddr $IpRange.PortGroup
+            Create-IP-Range $IpRange.CIDR $IpRange.StartAddr $IpRange.LastAddr $IpRange.PortGroup
         }
     
         #Add this portgroup to the UpdatedNetworks tracker
